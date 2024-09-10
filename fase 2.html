@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jogo da Memória</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-color: #000; /* Fundo preto */
+            color: #fff; /* Texto branco para melhor contraste */
+            margin: 0;
+            padding: 0;
+        }
+
+        #game-board {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 15px; /* Espaçamento maior entre as cartas */
+            margin-top: 20px;
+            width: 90vw;
+        }
+
+        .card {
+            width: 20vw;
+            height: 20vw;
+            background-color: #ddd;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            font-size: 0;
+            transition: transform 0.3s;
+        }
+
+        .card:hover {
+            transform: scale(1.05);
+        }
+
+        .card img {
+            max-width: 100%;
+            max-height: 100%;
+            display: none;
+        }
+
+        #timer, #message {
+            font-size: 5vw;
+            margin-top: 20px;
+        }
+
+        #next-phase-button {
+            display: none; /* Escondido até o jogador ganhar */
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            padding: 20px 40px;
+            background-color: #28a745; /* Cor verde */
+            color: #fff;
+            border: none;
+            font-size: 2vw;
+            font-weight: bold;
+            cursor: pointer;
+            border-radius: 10px;
+        }
+
+        #next-phase-button:hover {
+            background-color: #218838; /* Cor verde mais escura no hover */
+        }
+
+        @media (max-width: 600px) {
+            #game-board {
+                grid-template-columns: repeat(3, 1fr); /* Reduz para 3 colunas em telas menores */
+                gap: 20px; /* Aumenta ainda mais o espaçamento entre as cartas */
+            }
+
+            .card {
+                width: 26vw;
+                height: 26vw;
+            }
+
+            #timer, #message {
+                font-size: 6vw;
+            }
+
+            #next-phase-button {
+                font-size: 5vw;
+            }
+        }
+
+        @media (max-width: 400px) {
+            #game-board {
+                grid-template-columns: repeat(2, 1fr); /* Reduz para 2 colunas em telas muito pequenas */
+                gap: 25px; /* Aumenta o espaçamento para garantir que as cartas fiquem distantes */
+            }
+
+            .card {
+                width: 35vw;
+                height: 35vw;
+            }
+
+            #timer, #message {
+                font-size: 8vw;
+            }
+
+            #next-phase-button {
+                font-size: 6vw;
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1>Jogo da Memória</h1>
+    <div id="timer">Tempo: 40</div>
+    <div id="game-board"></div>
+    <div id="message"></div>
+
+    <audio id="click-sound" src="https://cdn.discordapp.com/attachments/1232398726518149291/1281454442637561886/SHARED_UNDO.wav?ex=66dbc6f3&is=66da7573&hm=342f5875576b9a4af19a3c7bb604248f6bfdb65d723803f77ed278ce6cd0acdc&"></audio> <!-- Som de clique -->
+    <audio id="match-sound" src="https://cdn.discordapp.com/attachments/1232398726518149291/1281453740469256232/highscore.mp3?ex=66dbc64b&is=66da74cb&hm=15d95b171bbdc85ef6d252557dc7026258021e2c4bc15c5ff3af2f37e5ed9fe9&"></audio> <!-- Som de acerto -->
+    <audio id="error-sound" src="https://exemplo.com/som-erro.mp3"></audio> <!-- Som de erro -->
+    <audio id="win-sound" src="https://cdn.discordapp.com/attachments/1232398726518149291/1281457698788872234/1pachi.mp3?ex=66e1b8bb&is=66e0673b&hm=412a4665ef8d309c774e53bc93e2e0d0b204a306f96ec96903130be747f3fcc2&"></audio> <!-- Som de vitória -->
+
+    <button id="next-phase-button">Próxima Fase</button> <!-- Botão para a próxima fase -->
+
+    <script>
+        const gameBoard = document.getElementById('game-board');
+        const timerDisplay = document.getElementById('timer');
+        const messageDisplay = document.getElementById('message');
+        const clickSound = document.getElementById('click-sound');
+        const matchSound = document.getElementById('match-sound');
+        const errorSound = document.getElementById('error-sound');
+        const winSound = document.getElementById('win-sound');
+        const nextPhaseButton = document.getElementById('next-phase-button'); // Botão para a próxima fase
+        const cards = [
+            'imagem1', 'imagem1',
+            'imagem2', 'imagem2',
+            'imagem3', 'imagem3',
+            'imagem4', 'imagem4',
+            'imagem5', 'imagem5',
+            'imagem6', 'imagem6',
+            'imagem7', 'imagem7',
+            'imagem8', 'imagem8'
+        ];
+        let flippedCards = [];
+        let matchedPairs = 0;
+        let timeLeft = 40;
+        let timerInterval;
+        let gameOver = false; // Variável de controle para bloquear o jogo
+
+        // Embaralhar as cartas
+        cards.sort(() => Math.random() - 0.5);
+
+        // Criar as cartas no tabuleiro
+        cards.forEach((card, index) => {
+            const cardElement = document.createElement('div');
+            cardElement.classList.add('card');
+            cardElement.dataset.cardName = card;
+            
+            const img = document.createElement('img');
+
+            // Defina os caminhos corretos das imagens
+            if (card === 'imagem1') {
+                img.src = 'https://i.ibb.co/94WrfJx/4368519eafbafac8a5a27bbbcde009e9.jpg';
+            } else if (card === 'imagem2') {
+                img.src = 'https://i.ibb.co/KNgNsrL/3fe57b4a52abdbc5cfc3e7c571438c2a.jpg';
+            } else if (card === 'imagem3') {
+                img.src = 'https://i.ibb.co/hWT11sJ/c932c5b831a067a33030af2c0c7dea82.jpg';
+            } else if (card === 'imagem4') {
+                img.src = 'https://i.ibb.co/tBRrsBy/5911bf3118417fc66fb7d584ed7bd805.jpg';
+            } else if (card === 'imagem5') {
+                img.src = 'https://i.ibb.co/tL3YVsH/8b6d53ffb8b169b0842c753a8ba36673.jpg';
+            } else if (card === 'imagem6') {
+                img.src = 'https://i.ibb.co/JKBnQzb/8e00130611cf100beaed96a6dc91893a.jpg';
+            } else if (card === 'imagem7') {
+                img.src = 'https://i.ibb.co/6BSxL4J/9eb7631f4946817567aa8217996571a1.jpg';
+            } else if (card === 'imagem8') {
+                img.src = 'https://i.ibb.co/YPjnBhZ/b2d1c98dfe0b7585107a2ba8a646c0c6.jpg';
+            } else {
+                img.src = `https://exemplo.com/caminho-para-suas-imagens/${card}.jpg`; // Substitua pelo caminho real das outras imagens
+            }
+
+            cardElement.appendChild(img);
+            gameBoard.appendChild(cardElement);
+
+            // Adicionar evento de clique nas cartas
+            cardElement.addEventListener('click', () => {
+                if (flippedCards.length === 2 || cardElement.classList.contains('flipped') || gameOver) {
+                    return; // Impedir mais cliques quando houver 2 cartas viradas ou o jogo tiver acabado
+                }
+
+                cardElement.classList.add('flipped');
+                img.style.display = 'block';
+                flippedCards.push(cardElement);
+
+                clickSound.play();
+
+                if (flippedCards.length === 2) {
+                    checkForMatch();
+                }
+            });
+        });
+
+        // Função para verificar se há correspondência
+        function checkForMatch() {
+            const [card1, card2] = flippedCards;
+
+            if (card1.dataset.cardName === card2.dataset.cardName) {
+                matchSound.play();
+                matchedPairs++;
+                flippedCards = [];
+
+                if (matchedPairs === cards.length / 2) {
+                    clearInterval(timerInterval);
+                    gameOver = true;
+                    messageDisplay.textContent = 'Você venceu!';
+                    winSound.play();
+                    nextPhaseButton.style.display = 'block'; // Mostrar o botão
+                }
+            } else {
+                setTimeout(() => {
+                    card1.classList.remove('flipped');
+                    card1.querySelector('img').style.display = 'none';
+                    card2.classList.remove('flipped');
+                    card2.querySelector('img').style.display = 'none';
+                    flippedCards = [];
+                }, 1000);
+            }
+        }
+
+        // Função para iniciar o temporizador
+        function startTimer() {
+            timerInterval = setInterval(() => {
+                timeLeft--;
+                timerDisplay.textContent = `Tempo: ${timeLeft}`;
+
+                if (timeLeft === 0) {
+                    clearInterval(timerInterval);
+                    gameOver = true; // Bloquear o jogo ao final do tempo
+                    messageDisplay.textContent = 'Tempo esgotado!';
+                    errorSound.play();
+                }
+            }, 1000);
+        }
+
+        startTimer();
+
+          // Ação do botão "Próxima Fase"
+        nextPhaseButton.addEventListener('click', () => {
+            window.location.href = 'https://www.youtube.com/watch?v=_-lKpaoXQkw&list=PLSUJxbdJja24nHN3Khx6cES91ltrvEbtm&index=8'; // Adicione o link para a próxima fase aqui
+        });
+    </script>
+</body>
+</html>
